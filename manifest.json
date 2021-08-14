@@ -1,0 +1,13 @@
+{
+  "domain": "positivo",
+  "name": "Positivo Casa Inteligente",
+  "config_flow": true,
+  "documentation": "https://github.com/rgsilva/homeassistant-positivo",
+  "requirements": ["pycryptodome==3.10.1", "requests==2.25.1"],
+  "dependencies": [],
+  "codeowners": [
+    "@rgsilva"
+  ],
+  "iot_class": "cloud_polling",
+  "version": "1.0.0"
+}
