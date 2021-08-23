@@ -13,7 +13,7 @@ from .tuya.exceptions import InvalidAuthentication
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["switch", "sensor"]
+PLATFORMS = ["switch", "sensor", "remote"]
 
 async def async_setup(hass: HomeAssistant, config: dict):
     # Ensure our name space for storing objects is a known type. A dict is

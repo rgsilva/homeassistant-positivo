@@ -53,8 +53,10 @@ class TextBookRSA:
         self._label = _copy_bytes(None, None, label)
         self._randfunc = randfunc
 
+
     def can_encrypt(self):
         return self._key.can_encrypt()
+
 
     def can_decrypt(self):
         return False

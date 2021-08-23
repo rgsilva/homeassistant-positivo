@@ -1,7 +1,9 @@
+import base64
 import logging
 import hmac
 import hashlib
 import json
+from Crypto.Util.number import bytes_to_long, long_to_bytes
 import requests
 import time
 import uuid
@@ -13,21 +15,33 @@ from .const import *
 from .exceptions import *
 
 PRODUCT_TYPES = {
-  "pq860vo9ib50jhud": "switch"
+  "pq860vo9ib50jhud": "switch",
+  "lwpag3bu0faaowlj": "smart_ir",
+  "trp7wywx3yx8yild": "remote", # light
+  "ZAx1jolkKaiu8JtM": "remote"  # tv
 }
+
+API_VERSION_FOR_ACTION = {
+  "tuya.m.infrared.keydata.get": "2.0",
+  "tuya.m.device.sub.list": "1.1",
+}
+DEFAULT_API_VERSION = "1.0"
+
+IR_VENDOR = "3"
 
 logger = logging.getLogger(__name__)
 
 class TuyaDevice:
-  def __init__(self, api, info):
+  def __init__(self, api, dev_info, gateway_id=None):
     self.api = api
 
-    self._schema = json.loads(info["schema"])
-    self._id = info["devId"]
-    self._dps = info["dps"]
-    self._name = info["name"]
-    self._online = info["isOnline"]
-    self._product = PRODUCT_TYPES[info["productId"]] if info["productId"] in PRODUCT_TYPES else "unknown"
+    self._schema = json.loads(dev_info["schema"])
+    self._id = dev_info["devId"]
+    self._gateway_id = dev_info["devId"] if gateway_id is None else gateway_id
+    self._dps = dev_info["dps"]
+    self._name = dev_info["name"]
+    self._online = dev_info["isOnline"]
+    self._product = PRODUCT_TYPES[dev_info["productId"]] if dev_info["productId"] in PRODUCT_TYPES else "unknown"
 
 
   @property
@@ -38,6 +52,11 @@ class TuyaDevice:
   @property
   def id(self):
     return self._id
+
+
+  @property
+  def gateway_id(self):
+    return self._gateway_id
 
 
   @property
@@ -61,14 +80,21 @@ class TuyaDevice:
 
 
   def set_dps(self, dps, value):
-    success = self.api.set_dps(self._id, dps, value)
+    success = self.api.set_dps(self._id, self._gateway_id, {dps: value})
     if success is True:
       self._dps[dps] = value
     return success
 
 
+  def set_dps_many(self, dps_values):
+    success = self.api.set_dps(self._id, self._gateway_id, dps_values)
+    if success is True:
+      self._dps = {**self._dps, **dps_values}
+    return success
+
+
   def refresh(self):
-    self._online = self.api._device(self._id)["isOnline"]
+    self._online = self.api._device_info(self._id)["isOnline"]
     self._dps = self.api.get_dps(self._id)
 
 
@@ -92,11 +118,14 @@ class TuyaAPI:
 
   def _api(self, options, post_data=None, requires_sid=True, do_not_relogin=False):
     headers = {"User-Agent": TUYA_USER_AGENT}
-    data = {"postData": json.dumps(post_data)} if post_data is not None else None
+
+    data = {"postData": json.dumps(post_data, separators=(',', ':'))} if post_data is not None else None
     sanitized_options = {**options}
     if "action" in sanitized_options:
       sanitized_options["a"] = options["action"]
       del sanitized_options["action"]
+    
+    api_version = API_VERSION_FOR_ACTION[options["action"]] if options["action"] in API_VERSION_FOR_ACTION else DEFAULT_API_VERSION
 
     params = {
       "appVersion": "1.1.6",
@@ -109,10 +138,10 @@ class TuyaAPI:
       "clientId": self._client_id,
       "osSystem": "9",
       "os": "Android",
-      "timeZoneId": "America/Bahia",
+      "timeZoneId": "America/Sao_Paulo",
       "ttid": "sdk_tuya@" + self._client_id,
       "et": "0.0.1",
-      "v": "1.0",
+      "v": api_version,
       "sdkVersion": "3.10.0",
       "time": str(int(time.time())),
       **sanitized_options
@@ -126,7 +155,9 @@ class TuyaAPI:
     sanitized_data = data if data is not None else {}
     params["sign"] = self._sign({**params, **sanitized_data})
 
+    result = None
     try:
+ 
       result = self._handle(self.session.post(TUYA_ENDPOINT, params=params, data=data, headers=headers).json())
       logger.debug("Request: options %s, headers %s, params %s, data %s, result %s", options, headers, params, data, result)
     except InvalidUserSession:
@@ -214,10 +245,10 @@ class TuyaAPI:
 
 
   def device(self, device_id):
-    return TuyaDevice(self, self._device(device_id))
+    return TuyaDevice(self, self._device_info(device_id))
 
   
-  def _device(self, device_id):
+  def _device_info(self, device_id):
     return self._api({"action": "tuya.m.device.get"}, {"devId": device_id})
 
 
@@ -229,8 +260,72 @@ class TuyaAPI:
       return result
 
 
-  def set_dps(self, device_id, dps, value=None):
-    if isinstance(dps, dict):
-      return self._api({"action": "tuya.m.device.dp.publish"}, {"devId": device_id, "gwId": device_id, "dps": json.dumps(dps)})
+  def set_dps(self, device_id, gateway_id, dps):
+    return self._api(
+      {"action": "tuya.m.device.dp.publish"},
+      {"devId": device_id, "gwId": gateway_id, "dps": json.dumps(dps)}
+    )
+
+
+  def ir_children(self, parent_id):
+    subdevs = []
+    devices = self._api({"action": "tuya.m.device.sub.list"}, {"meshId": parent_id})
+    for subdev in devices:
+      subdevs.append(TuyaDevice(self, self._device_info(subdev["devId"]), gateway_id=parent_id))
+    return subdevs
+
+
+  def ir_get_buttons(self, gateway_id, device_id):
+    record = self._api({"action": "tuya.m.infrared.record.get"}, {"devId": device_id, "gwId": device_id, "subDevId": device_id, "vender": IR_VENDOR})
+    if "exts" in record and json.loads(record["exts"])["study"] == 1:
+      return self._ir_learned_buttons(gateway_id, device_id)
     else:
-      return self._api({"action": "tuya.m.device.dp.publish"}, {"devId": device_id, "gwId": device_id, "dps": json.dumps({dps: value})})
+      return self._ir_keydata_buttons(record)
+  
+
+  def _ir_learned_buttons(self, gateway_id, device_id):
+    buttons = self._api(
+      {"action": "tuya.m.infrared.learn.get"},
+      {"devId": gateway_id, "gwId": gateway_id, "subDevId": device_id, "vender": IR_VENDOR}
+    )
+
+    return list({
+      "name": button["keyName"],
+      "learned": True,
+      "info": {
+        "keyCode": button["compressPulse"],
+        "frequency": button["frequency"],
+        "repeat": button["repeat"]
+      },
+      "dps": {
+        "1": "study_key",
+        "3": "",
+        "7": base64.encodebytes(long_to_bytes(int(button["compressPulse"], 16))).decode("latin1").replace("\n", ""),
+      }
+    } for button in buttons)
+
+
+  def _ir_keydata_buttons(self, record):
+    buttons = self._api(
+      {"action": "tuya.m.infrared.keydata.get"},
+      {"devId": record["devId"], "devTypeId": str(record["devTypeId"]), "gwId": record["gwId"], "remoteId": str(record["remoteId"]), "vender": IR_VENDOR}
+    )
+
+    if "compressPulseList" not in buttons:
+      return []
+
+    return list({
+      "name": button["keyName"],
+      "learned": False,
+      "info": {
+        "keyCode": button["compressPulse"],
+        "irCode": json.loads(button["exts"])["99999"],
+      },
+      "dps": {
+        "1": "send_ir",
+        "3": json.loads(button["exts"])["99999"],
+        "4": button["compressPulse"],
+        "10": 300, # TODO: this shouldn't be hard-coded.
+        "13": 0,
+      }
+    } for button in buttons["compressPulseList"])
