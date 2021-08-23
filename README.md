@@ -21,6 +21,7 @@ The Tuya Cloud have multiple API versions. The one I'm using here is a very bad 
 
 There are always missing things and stuff we can make better. This list is obviously incomplete!
 
+- Sometimes the authentication crashes. The API still works, but the log gets full of errors which I still need to debug.
 - Detect a device that has gone online or offline in realtime.
 - The API client must be rewritten in proper Python standard and not this shitty code I made.
 - Support for lightbulbs.
