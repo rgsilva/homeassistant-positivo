@@ -36,6 +36,7 @@ There are always missing things and stuff we can make better. This list is obvio
   - Currently the state is always unavailable. I believe we can improve this by having some kind of internal stat, possibly though an opt-in/out feature.
   - The commands are case-sensitive. This is easy, we can simply make them case insensitive.
   - Turn on and off commands fail. We can map those to the words "on" and "off" and find commands matching those words.
+- Add support for the energy stuff on devices we can measure power (such as power outlets).
 
 **API**
 
@@ -44,6 +45,8 @@ There are always missing things and stuff we can make better. This list is obvio
 - Keep the token between HA restarts. This is important to avoid flooding the server with logins on every restart.
 - Improve device detection though Tuya official codes. This can easily be found on their own [official implementation](https://github.com/tuya/tuya-home-assistant) of this integration¹ and [their official documentation](https://developer.tuya.com/en/docs/iot/categorykgczpc?id=Kaiuz08zj1l4y). Both, as far as I know, do **not** support Positivo's devices - unless you connect them to Tuya directly, of course.
 - Support for the new API version (2.0) which has all requests encrypted. This can be tricky as it requires figuring out how the requests are actually being made. Nothing a crazy weekend on Frida wouldn't solve, I suppose.
+- Allow to use the local tuya protocol for faster (and offline) device control.
+- Allow to use the MQTT for device control.
 
 # Credits
 
