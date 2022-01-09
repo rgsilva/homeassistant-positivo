@@ -21,6 +21,7 @@ The Tuya Cloud have multiple API versions. The one I'm using here is a very bad 
 - IR controller (yes, really)
   - Basic TV remote control
   - Basic generic light control
+  - Generic IR commands (NEC and Sony protocols)
 
 Device support increases based on my own demand, but feel free to send PRs for devices you own. If you don't feel like reverse engineering the device (in case it's fully unsupported) and wants to send me one so I can try to do it, let me know.
 
