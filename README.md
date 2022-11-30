@@ -1,3 +1,4 @@
+**NOTE: this project is not maintained anymore. Feel free to fork it if you want, but I've personally migrated all my devices to ESPHome. Turns out disassembling them is not that hard :)**
 
 # Positivo Casa Inteligente
 
